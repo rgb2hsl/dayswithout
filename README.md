@@ -36,4 +36,3 @@ keywords:
   - "(?i)orange\\w*"
   - "(?i)banana\\w*"
   - "(?i)fruit\\w*"
-  - "(?i)вэриен\\w*"
