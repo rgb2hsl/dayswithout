@@ -1,0 +1,12 @@
+bot_token: "%YOUR_TG_BOT_TOKEN%"
+
+# Topic
+topic: "Fruits"
+
+# Triggers
+keywords:
+  - "(?i)apple\\w*"
+  - "(?i)orange\\w*"
+  - "(?i)banana\\w*"
+  - "(?i)fruit\\w*"
+  - "(?i)вэриен\\w*"
