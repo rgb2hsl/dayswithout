@@ -1,0 +1,9 @@
+token: "%yourtoken%"
+
+# Отслеживаемая тема
+topic: "topic"
+
+# Список регулярных выражений для поиска триггеров
+keywords:
+  - "(?i)word\\w*"
+  - "(?i)anotherword"
