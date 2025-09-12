@@ -19,7 +19,7 @@ const (
 
 // Config holds bot token, topic and keywords from config.yaml
 type Config struct {
-	BotToken string   `yaml:"bot_token"`
+	BotToken string   `yaml:"token"`
 	Topic    string   `yaml:"topic"`
 	Keywords []string `yaml:"keywords"`
 }
@@ -132,7 +132,7 @@ func main() {
 		}
 		days := int(time.Since(storage.LastMention).Hours() / 24)
 		text := fmt.Sprintf(
-			"С последнего упоминания '%s' прошло %d дней.\nПоследнее упоминание было: %s",
+			"С последнего упоминания %s прошло %d дней.\nПоследнее упоминание было: %s",
 			cfg.Topic, days, storage.LastMention.Format("02.01.2006 15:04:05"),
 		)
 		return c.Send(text)
@@ -143,7 +143,7 @@ func main() {
 		log.Printf("[DEBUG] Command /reset from user=%s chat=%d", c.Sender().Username, c.Chat().ID)
 		storage.LastMention = time.Now()
 		saveStorage(storage)
-		text := fmt.Sprintf("Счётчик обнулён. Последнее упоминание '%s' записано: %s",
+		text := fmt.Sprintf("Кто-то что-то написал про %s %s 💀💀💀 запомнили",
 			cfg.Topic, storage.LastMention.Format("02.01.2006 15:04:05"))
 		return c.Send(text)
 	})
@@ -163,7 +163,7 @@ func main() {
 				return nil
 			}
 			response := fmt.Sprintf(
-				"Обнаружено упоминание «%s».\nСбросить счётчик '%s'? Используйте /reset для подтверждения.",
+				"Кто-то сказал «%s»?\nСбросить счётчик дней без %s? Используйте /reset для подтверждения.",
 				found, cfg.Topic,
 			)
 			log.Printf("[DEBUG] Sending trigger message to chat=%d", msg.Chat.ID)
