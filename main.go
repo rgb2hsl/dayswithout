@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"time"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	tb "gopkg.in/telebot.v3"
 	"gopkg.in/yaml.v3"
 )
 
@@ -29,9 +29,8 @@ type Storage struct {
 	LastMention time.Time `json:"last_mention"`
 }
 
-// loadConfig reads and parses config.yaml
 func loadConfig() Config {
-	log.Println("[DEBUG] Loading config...")
+	log.Println("[DEBUG] Loading config.yaml...")
 	var cfg Config
 	file, err := os.ReadFile(configFile)
 	if err != nil {
@@ -45,9 +44,8 @@ func loadConfig() Config {
 	return cfg
 }
 
-// loadStorage reads the last mention time from data.json
 func loadStorage() Storage {
-	log.Println("[DEBUG] Loading storage...")
+	log.Println("[DEBUG] Loading storage from data.json...")
 	var s Storage
 	file, err := os.ReadFile(dataFile)
 	if err != nil {
@@ -57,7 +55,7 @@ func loadStorage() Storage {
 	}
 	err = json.Unmarshal(file, &s)
 	if err != nil {
-		log.Printf("[ERROR] Failed to parse JSON: %v", err)
+		log.Printf("[ERROR] Failed to parse data.json: %v", err)
 		s.LastMention = time.Time{}
 	}
 	if s.LastMention.IsZero() {
@@ -68,7 +66,6 @@ func loadStorage() Storage {
 	return s
 }
 
-// saveStorage writes the last mention time to data.json
 func saveStorage(s Storage) {
 	log.Printf("[DEBUG] Saving storage: lastMention=%s", s.LastMention.Format(time.RFC3339))
 	data, err := json.MarshalIndent(s, "", "  ")
@@ -78,11 +75,10 @@ func saveStorage(s Storage) {
 	}
 	err = os.WriteFile(dataFile, data, 0644)
 	if err != nil {
-		log.Printf("[ERROR] Failed to write JSON: %v", err)
+		log.Printf("[ERROR] Failed to write data.json: %v", err)
 	}
 }
 
-// compileRegexps compiles keyword patterns into regex objects
 func compileRegexps(patterns []string) []*regexp.Regexp {
 	log.Println("[DEBUG] Compiling regexps...")
 	var regs []*regexp.Regexp
@@ -97,14 +93,15 @@ func compileRegexps(patterns []string) []*regexp.Regexp {
 	return regs
 }
 
-// findKeyword searches for the first matching keyword in a text
 func findKeyword(text string, regs []*regexp.Regexp) string {
 	for _, r := range regs {
 		if r.MatchString(text) {
-			log.Printf("[DEBUG] Keyword match: %q in message", r.FindString(text))
-			return r.FindString(text)
+			match := r.FindString(text)
+			log.Printf("[DEBUG] Keyword matched: %q in message=%q", match, text)
+			return match
 		}
 	}
+	log.Printf("[DEBUG] No keyword matched in message=%q", text)
 	return ""
 }
 
@@ -112,88 +109,69 @@ func main() {
 	cfg := loadConfig()
 	regs := compileRegexps(cfg.Keywords)
 
-	log.Println("[DEBUG] Initializing bot...")
-	bot, err := tgbotapi.NewBotAPI(cfg.BotToken)
-	if err != nil {
-		log.Panicf("[FATAL] Failed to init bot: %v", err)
-	}
-
-	bot.Debug = false
-	log.Printf("[INFO] Authorized as %s", bot.Self.UserName)
-
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
-
-	log.Println("[DEBUG] Starting updates channel...")
-	updates := bot.GetUpdatesChan(u)
-
 	storage := loadStorage()
 
-	log.Println("[INFO] Bot is running and waiting for updates...")
+	pref := tb.Settings{
+		Token:  cfg.BotToken,
+		Poller: &tb.LongPoller{Timeout: 10 * time.Second},
+	}
 
-	for update := range updates {
-		if update.Message == nil {
-			log.Println("[DEBUG] Update received, but no message -> skipping")
-			continue
+	log.Println("[DEBUG] Initializing bot...")
+	b, err := tb.NewBot(pref)
+	if err != nil {
+		log.Fatalf("[FATAL] Failed to init bot: %v", err)
+	}
+
+	log.Printf("[INFO] Authorized as @%s (id=%d)", b.Me.Username, b.Me.ID)
+
+	// Handle /days
+	b.Handle("/days", func(c tb.Context) error {
+		log.Printf("[DEBUG] Command /days from user=%s chat=%d", c.Sender().Username, c.Chat().ID)
+		if storage.LastMention.IsZero() {
+			return c.Send(fmt.Sprintf("Ещё ни разу не упоминали '%s'.", cfg.Topic))
 		}
-
-		chatID := update.Message.Chat.ID
-		textMsg := update.Message.Text
-
-		log.Printf("[DEBUG] New message in chat=%d from=%s text=%q",
-			chatID,
-			update.Message.From.UserName,
-			textMsg,
+		days := int(time.Since(storage.LastMention).Hours() / 24)
+		text := fmt.Sprintf(
+			"С последнего упоминания '%s' прошло %d дней.\nПоследнее упоминание было: %s",
+			cfg.Topic, days, storage.LastMention.Format("02.01.2006 15:04:05"),
 		)
+		return c.Send(text)
+	})
 
-		// --- Handle commands ---
-		switch update.Message.Command() {
-		case "days":
-			log.Println("[DEBUG] Command /days triggered")
-			if storage.LastMention.IsZero() {
-				bot.Send(tgbotapi.NewMessage(chatID, fmt.Sprintf("Ещё ни разу не упоминали '%s'.", cfg.Topic)))
-				continue
-			}
-			days := int(time.Since(storage.LastMention).Hours() / 24)
-			text := fmt.Sprintf(
-				"С последнего упоминания '%s' прошло %d дней.\nПоследнее упоминание было: %s",
-				cfg.Topic, days, storage.LastMention.Format("02.01.2006 15:04:05"),
-			)
-			bot.Send(tgbotapi.NewMessage(chatID, text))
+	// Handle /reset
+	b.Handle("/reset", func(c tb.Context) error {
+		log.Printf("[DEBUG] Command /reset from user=%s chat=%d", c.Sender().Username, c.Chat().ID)
+		storage.LastMention = time.Now()
+		saveStorage(storage)
+		text := fmt.Sprintf("Счётчик обнулён. Последнее упоминание '%s' записано: %s",
+			cfg.Topic, storage.LastMention.Format("02.01.2006 15:04:05"))
+		return c.Send(text)
+	})
 
-		case "reset":
-			log.Println("[DEBUG] Command /reset triggered")
-			storage.LastMention = time.Now()
-			saveStorage(storage)
-			text := fmt.Sprintf("Счётчик обнулён. Последнее упоминание '%s' записано: %s",
-				cfg.Topic, storage.LastMention.Format("02.01.2006 15:04:05"))
-			bot.Send(tgbotapi.NewMessage(chatID, text))
-			continue
-		default:
-			if update.Message.IsCommand() {
-				log.Printf("[DEBUG] Unknown command: %s", update.Message.Command())
-			}
-		}
+	// Handle all text messages
+	b.Handle(tb.OnText, func(c tb.Context) error {
+		msg := c.Message()
+		log.Printf("[DEBUG] New text message in chat=%d from=%s text=%q",
+			msg.Chat.ID, msg.Sender.Username, msg.Text)
 
-		// --- Handle regular messages ---
-		found := findKeyword(textMsg, regs)
+		found := findKeyword(msg.Text, regs)
 		if found != "" {
-			log.Printf("[DEBUG] Keyword trigger found: %q", found)
-
 			// Ignore if last mention was less than 2 hours ago
 			if !storage.LastMention.IsZero() && time.Since(storage.LastMention) < 2*time.Hour {
-				log.Printf("[DEBUG] Ignoring mention, last was %s (<2h ago)",
+				log.Printf("[DEBUG] Ignoring mention, lastMention=%s (<2h ago)",
 					storage.LastMention.Format(time.RFC3339))
-				continue
+				return nil
 			}
-
 			response := fmt.Sprintf(
 				"Обнаружено упоминание «%s».\nСбросить счётчик '%s'? Используйте /reset для подтверждения.",
 				found, cfg.Topic,
 			)
-			bot.Send(tgbotapi.NewMessage(chatID, response))
-		} else {
-			log.Println("[DEBUG] No keywords found in message")
+			log.Printf("[DEBUG] Sending trigger message to chat=%d", msg.Chat.ID)
+			return c.Send(response)
 		}
-	}
+		return nil
+	})
+
+	log.Println("[INFO] Bot started, waiting for updates...")
+	b.Start()
 }
