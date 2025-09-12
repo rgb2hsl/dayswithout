@@ -1,4 +1,4 @@
-token: "%yourtoken%"
+bot_token: "%yourtoken%"
 
 # Отслеживаемая тема
 topic: "topic"
@@ -7,3 +7,5 @@ topic: "topic"
 keywords:
   - "(?i)word\\w*"
   - "(?i)anotherword"
+
+debug: true
