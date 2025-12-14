@@ -93,20 +93,6 @@ func saveStorage(s Storage) {
 	}
 }
 
-func compileRegexps(patterns []string) []*regexp.Regexp {
-	debugLog("Compiling regexps...")
-	var regs []*regexp.Regexp
-	for _, p := range patterns {
-		debugLog("Compiling regexp: %s", p)
-		r, err := regexp.Compile(p)
-		if err != nil {
-			log.Fatalf("[ERROR] Failed to compile regexp %q: %v", p, err)
-		}
-		regs = append(regs, r)
-	}
-	return regs
-}
-
 func buildKeywordRegex(words []string, noSuffix []string) *regexp.Regexp {
 	const leftBoundary = `(?:^|[^\p{L}\p{N}_])`
 	const rightBoundary = `(?:$|[^\p{L}\p{N}_])`
