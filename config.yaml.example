@@ -1,11 +1,21 @@
 bot_token: "%yourtoken%"
 
-# Отслеживаемая тема
+# Tracked topic (used in bot responses)
 topic: "topic"
 
-# Список регулярных выражений для поиска триггеров
+# Keywords/phrases to detect (NOT regex anymore).
+# Case-insensitive matching is done in code.
+# For phrases with spaces like "Sonic CIS" it will match flexible whitespace.
 keywords:
-  - "(?i)word\\w*"
-  - "(?i)anotherword"
+  - "word"
+  - "anotherword"
+  - "word with spaces"
 
+# Words that should match ONLY as-is (no automatic suffix matching),
+# useful for short roots to avoid false positives.
+# Example: "far" would otherwise match "farsh", "fart", etc.
+no_suffix:
+  - "word"
+
+# Enable verbose debug logs
 debug: true
