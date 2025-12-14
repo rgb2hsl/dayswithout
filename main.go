@@ -151,10 +151,13 @@ func main() {
 	// Handle /reset
 	b.Handle("/reset", func(c tb.Context) error {
 		log.Printf("[INFO] Command /reset from user=%s chat=%d", c.Sender().Username, c.Chat().ID)
+		prevLastMention := storage.LastMention
+		daysWas := int(time.Since(prevLastMention).Hours() / 24)
 		storage.LastMention = time.Now()
 		saveStorage(storage)
-		text := fmt.Sprintf("Кто-то что-то написал про %s %s 💀💀💀 запомнили",
-			cfg.Topic, storage.LastMention.Format("02.01.2006 15:04:05"))
+		text := fmt.Sprintf("Кто-то что-то написал про %s %s 💀💀💀 запомнили, мы продержались %d дней.\nПоследнее упоминание до этого было: %s",
+			cfg.Topic, storage.LastMention.Format("02.01.2006 15:04:05"), daysWas, storage.LastMention.Format("02.01.2006 15:04:05"),
+		)
 		return c.Send(text)
 	})
 
